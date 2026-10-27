@@ -1,0 +1,57 @@
+{
+  "readings": 10503024,
+  "alerts": {
+    "no_generation": {
+      "site_days": 1646,
+      "sites": 35
+    },
+    "underperforming": {
+      "site_days": 1189,
+      "sites": 218
+    },
+    "missing_data": {
+      "site_days": 81,
+      "sites": 1
+    }
+  },
+  "quarantine": {
+    "nonexistent_local_time": 1200
+  },
+  "flags": {
+    "night": 2,
+    "over": 15
+  },
+  "healthy_sites_evaluated": 250,
+  "bench": {
+    "rows": 10503024,
+    "table_size": "523 MB",
+    "one_day_ms": {
+      "primary_key_only": 548.8,
+      "brin_on_ts": 66.6,
+      "btree_on_ts": 9.8
+    },
+    "brin_size": "32 kB",
+    "btree_size": "69 MB",
+    "dashboard_month_ms": {
+      "from_raw_readings": 1.3,
+      "from_daily_table": 0.5
+    }
+  },
+  "health": {
+    "ok": true,
+    "problems": [],
+    "latest_day": "2013-06-30",
+    "sites": 300,
+    "reporting_latest_day": 300,
+    "alerts_latest_day": {},
+    "quarantine_by_reason": {
+      "nonexistent_local_time": 1200
+    },
+    "last_run": {
+      "run_id": 17,
+      "status": "ok",
+      "rows_loaded": 864000,
+      "rows_quarantined": 0
+    }
+  }
+}

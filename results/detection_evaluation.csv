@@ -1,0 +1,10 @@
+threshold,fault,caught_within_7_days,median_days_to_alert,false_alarms_per_1000_site_days
+0.6,outage,1.0,0.0,2.93
+0.6,half_output,0.992,1.0,2.93
+0.6,one_third_down,0.304,7.0,2.93
+0.7,outage,1.0,0.0,9.23
+0.7,half_output,0.996,1.0,9.23
+0.7,one_third_down,0.924,2.0,9.23
+0.8,outage,1.0,0.0,29.69
+0.8,half_output,1.0,1.0,29.69
+0.8,one_third_down,0.992,1.0,29.69

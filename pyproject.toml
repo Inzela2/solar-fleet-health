@@ -1,0 +1,19 @@
+[project]
+name = "fleethealth"
+version = "0.1.0"
+description = "Data pipeline and fault detection for a fleet of 300 rooftop solar installations."
+requires-python = ">=3.10"
+dependencies = ["pandas>=2.0", "numpy", "psycopg[binary]>=3.1", "fastapi", "uvicorn"]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

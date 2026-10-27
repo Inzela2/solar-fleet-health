@@ -1,5 +1,0 @@
-services:
-  db:
-    image: postgres:16
-    environment: {POSTGRES_USER: solar, POSTGRES_PASSWORD: solar, POSTGRES_DB: solar}
-    ports: ["5432:5432"]

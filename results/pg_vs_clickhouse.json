@@ -1,0 +1,100 @@
+{
+  "storage": {
+    "rows": 10503024,
+    "postgres_mb": {
+      "table": 522.7,
+      "primary_key_index": 316.0,
+      "total": 838.6
+    },
+    "clickhouse_mb": {
+      "on_disk": 20.9,
+      "uncompressed": 140.3
+    },
+    "postgres_to_clickhouse_ratio": 40.1
+  },
+  "queries": {
+    "one_day_raw": {
+      "what": "Backfill read: all readings for one day",
+      "postgres_ms": 9.5,
+      "postgres_best_index": "btree",
+      "clickhouse_ms": 8.9,
+      "results_match": true,
+      "speedup": 1.1
+    },
+    "site_month_raw": {
+      "what": "Dashboard: one site's daily generation for a month, from raw readings",
+      "postgres_ms": 0.7,
+      "postgres_best_index": "btree",
+      "clickhouse_ms": 3.5,
+      "results_match": true,
+      "speedup": 0.2
+    },
+    "site_month_daily": {
+      "what": "Dashboard: same, from the precomputed daily table",
+      "postgres_ms": 0.1,
+      "postgres_best_index": "n/a",
+      "clickhouse_ms": 2.7,
+      "results_match": true,
+      "speedup": 0.0
+    },
+    "postcode_median_year_raw": {
+      "what": "Cohort: median daily yield per postcode, every day of the year, from raw readings",
+      "postgres_ms": 2730.9,
+      "postgres_best_index": "btree",
+      "clickhouse_ms": 170.1,
+      "results_match": true,
+      "speedup": 16.1
+    },
+    "cohort_compare_year_raw": {
+      "what": "Cohort comparison: monthly generation and use, small vs large systems, from raw readings",
+      "postgres_ms": 16751.8,
+      "postgres_best_index": "btree",
+      "clickhouse_ms": 571.8,
+      "results_match": true,
+      "speedup": 29.3
+    },
+    "postcode_month_daily": {
+      "what": "API-style: average performance ratio per postcode per month, from the daily table",
+      "postgres_ms": 34.3,
+      "postgres_best_index": "n/a",
+      "clickhouse_ms": 9.1,
+      "results_match": true,
+      "speedup": 3.8
+    }
+  },
+  "operations": {
+    "rebuild_year_of_daily_metrics": {
+      "postgres_ms": 6386.3,
+      "clickhouse_ms": 460.2,
+      "speedup": 13.9
+    },
+    "reload_one_month_of_readings": {
+      "rows": 892800,
+      "postgres_ms": 13354.5,
+      "clickhouse_ms": 699.0,
+      "speedup": 19.1
+    }
+  },
+  "kwh_codec_study": {
+    "lz4_default": {
+      "mb": 22.0,
+      "ratio": 1.8
+    },
+    "zstd1": {
+      "mb": 18.9,
+      "ratio": 2.1
+    },
+    "gorilla_zstd": {
+      "mb": 26.9,
+      "ratio": 1.5
+    },
+    "fpc_zstd": {
+      "mb": 26.3,
+      "ratio": 1.5
+    },
+    "t64_on_wh_int": {
+      "mb": 8.7,
+      "ratio": 4.6
+    }
+  }
+}

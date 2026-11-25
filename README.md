@@ -40,6 +40,11 @@ On the real data, the pipeline found **35 sites with whole days of zero generati
 | Compare each site to the **fleet median** and its **own baseline** | The fleet median removes weather; the site's own 28-day baseline removes roof angle and shading differences. |
 | Thresholds chosen by injecting known faults | Real faults have no labels, so detection was measured, not guessed. |
 | `health` command exits non-zero | Can run on a schedule and alert when the pipeline itself is stale or failing. |
+| ClickHouse alongside Postgres, not instead | Postgres keeps small transactional tables (runs, alerts) and point lookups; ClickHouse takes wide analytical scans. |
+| ClickHouse loads by **partition swap** | ClickHouse has no `ON CONFLICT`. Each month is built in a staging table and swapped in atomically, so reloads are exact and queries never need `FINAL` ([ADR 0001](docs/adr/0001-idempotent-loads.md)). |
+| ClickHouse partitions by **local** month, with `day` stored | The pipeline loads by Sydney month; UTC partitions would split each one in two. |
+| `quantileExactInclusive`, not `quantileExact` | Matches Postgres `percentile_cont` (interpolates). The parity test fails if this is changed. |
+| Validation runs once for both stores | `load.prepare` builds one batch; both stores receive identical rows. |
 
 ## Query tuning (10.5M rows, 523 MB table)
 
@@ -51,15 +56,64 @@ On the real data, the pipeline found **35 sites with whole days of zero generati
 
 BRIN gives an 8× speed-up for a tiny index because data arrives in time order. B-tree is faster again but 2,000× larger. For a daily batch job BRIN is the better trade-off; for interactive time queries, B-tree.
 
+## PostgreSQL vs ClickHouse
+
+The same validated data also loads into ClickHouse (`--backend both`), so the two can be
+compared on real questions. Postgres stays the system of record (run bookkeeping, alerts,
+health checks); ClickHouse is the analytics store. Every timing below only counts if both
+databases returned the same answer (`python -m fleethealth compare`, full output in
+`results/pg_vs_clickhouse.json`).
+
+**Setup:** 10.5M readings, PostgreSQL 16 vs ClickHouse 24.8, same machine, **1 CPU core and
+3 GB RAM**. Postgres gets its best index per query (BRIN or B-tree on `ts`, both tried).
+Median of warm runs, including fetching results.
+
+| Query | Postgres | ClickHouse | Faster |
+|---|---|---|---|
+| One site, one month, from the daily table | 0.1 ms | 2.7 ms | Postgres, 27× |
+| One site, one month, from raw readings | 0.7 ms | 3.5 ms | Postgres, 5× |
+| All readings for one day | 9.5 ms | 8.9 ms | about the same |
+| Avg performance per postcode per month (daily table) | 34 ms | 9.1 ms | ClickHouse, 3.8× |
+| Median daily yield per postcode, full year (raw) | 2.7 s | 170 ms | ClickHouse, 16× |
+| Small vs large systems, monthly totals, full year (raw) | 16.8 s | 572 ms | ClickHouse, 29× |
+| Rebuild a year of daily metrics | 6.4 s | 460 ms | ClickHouse, 14× |
+| Re-load one month of readings (893k rows) | 13.4 s | 699 ms | ClickHouse, 19× |
+
+| Storage for `readings` | Size |
+|---|---|
+| Postgres table | 523 MB |
+| Postgres primary-key index | 316 MB |
+| ClickHouse, compressed on disk | 21 MB (25× smaller than the Postgres table alone, 40× with its index) |
+
+**What this says:** Postgres wins on point lookups, which is what its primary key is built for,
+and at these sizes those queries are fast enough on either. ClickHouse wins wherever a query
+reads most of the table: cohort breakdowns, fleet-wide rebuilds and bulk reloads. At 10.5M
+rows Postgres is still usable for the nightly batch; the case for ClickHouse is interactive
+cohort slicing (seconds become sub-second) and storage. ClickHouse normally spreads a query
+across all cores, so with one core these numbers understate its advantage on a normal
+machine; re-run `compare` on your own hardware.
+
+**Correctness:** daily metrics agree on all 109,419 site-days to float32 rounding (max relative
+difference 1e-6), with identical NULLs and quarantine counts. One thing the comparison found:
+Postgres `sum()` over a `real` column accumulates in single precision, so the fleet's total
+generation is off by 0.1% (2,328,310 vs 2,330,578 kWh). Daily sums of 48 values are
+unaffected; the benchmark sums as `float8`.
+
+**Compression choice, measured** (kWh column, 10.5M values): ZSTD(1) 18.9 MB, LZ4 22.0 MB,
+Gorilla+ZSTD 26.9 MB, FPC+ZSTD 26.3 MB. Gorilla is designed for slowly changing floats, but
+half-hourly solar readings jump around and are often zero, so plain ZSTD wins. Storing whole
+watt-hours as integers with T64+ZSTD would be 8.7 MB, a possible next step.
+
 ## Run it
 
 ```bash
-docker compose up -d                       # PostgreSQL 16
+docker compose up -d                       # PostgreSQL 16 + ClickHouse 24.8
 pip install -e ".[dev]"
-pytest                                     # 12 tests, no database needed
-python -m fleethealth backfill             # download, load, metrics, alerts (~5 min)
+pytest -m "not integration"                # 13 quick tests, no database needed
+pytest -m integration                      # Postgres/ClickHouse parity and reload tests
+python -m fleethealth backfill --backend both   # download, load both stores, metrics, alerts
 python -m fleethealth health --as-of 2013-06-30
-uvicorn fleethealth.api:app                # /sites/{id}/daily, /alerts, /health
+python -m fleethealth compare              # benchmark both, writes results/pg_vs_clickhouse.json
 ```
 
 Data: [Ausgrid Solar Home Electricity Data](https://www.ausgrid.com.au/Industry/Our-Research/Data-to-share/Solar-home-electricity-data) (CC BY), via a pinned GitHub mirror.

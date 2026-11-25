@@ -3,7 +3,8 @@ name = "fleethealth"
 version = "0.1.0"
 description = "Data pipeline and fault detection for a fleet of 300 rooftop solar installations."
 requires-python = ">=3.10"
-dependencies = ["pandas>=2.0", "numpy", "psycopg[binary]>=3.1", "fastapi", "uvicorn"]
+dependencies = ["pandas>=2.0", "numpy", "psycopg[binary]>=3.1", "fastapi", "uvicorn",
+                "clickhouse-connect>=0.7"]
 
 [project.optional-dependencies]
 dev = ["pytest", "httpx"]
@@ -17,3 +18,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+markers = ["integration: needs Postgres and ClickHouse running (docker compose up -d)"]

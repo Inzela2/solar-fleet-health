@@ -5,22 +5,41 @@ INSERT ... ON CONFLICT DO UPDATE. Re-running a day (late data, a corrected file,
 updates values in place instead of duplicating them, and the run is recorded in ingest_runs.
 """
 import datetime as dt
+from dataclasses import dataclass
 import pandas as pd
 from . import db, source, validate
 
 
-def ingest(conn, wide: pd.DataFrame, date_from: dt.date, date_to: dt.date) -> dict:
+@dataclass
+class Batch:
+    """One date range of validated data, ready to write to any store (Postgres or ClickHouse).
+    Validation happens once, here, so both stores always receive identical rows."""
+    date_from: dt.date
+    date_to: dt.date
+    valid: pd.DataFrame
+    rejected: pd.DataFrame
+    sites: pd.DataFrame
+    rows_in: int
+
+
+def prepare(wide: pd.DataFrame, date_from: dt.date, date_to: dt.date) -> Batch:
     part = wide[(wide["local_date"] >= date_from) & (wide["local_date"] <= date_to)]
+    long, rejected_time = source.to_long(part)
+    valid, rejected_rows = validate.check_rows(long)
+    rejected = pd.concat([rejected_time, rejected_rows], ignore_index=True)
+    return Batch(date_from, date_to, valid, rejected, source.sites(part),
+                 rows_in=len(long) + len(rejected_time))
+
+
+def ingest(conn, wide: pd.DataFrame, date_from: dt.date, date_to: dt.date,
+           batch: Batch | None = None) -> dict:
     run_id = conn.execute(
         "INSERT INTO ingest_runs (date_from, date_to) VALUES (%s, %s) RETURNING run_id",
         (date_from, date_to)).fetchone()[0]
     conn.commit()
     try:
-        long, rejected_time = source.to_long(part)
-        valid, rejected_rows = validate.check_rows(long)
-        rejected = pd.concat([rejected_time, rejected_rows], ignore_index=True)
-
-        sites = source.sites(part)
+        b = batch or prepare(wide, date_from, date_to)
+        valid, rejected, sites = b.valid, b.rejected, b.sites
         with conn.transaction():
             conn.execute("""CREATE TEMP TABLE stage_sites (LIKE sites) ON COMMIT DROP""")
             db.copy_frame(conn, "stage_sites", sites, ["site_id", "capacity_kw", "postcode"])
@@ -43,7 +62,7 @@ def ingest(conn, wide: pd.DataFrame, date_from: dt.date, date_to: dt.date) -> di
                               ["run_id", "site_id", "channel", "local_date", "slot", "value", "reason"])
             conn.execute("""UPDATE ingest_runs SET finished_at = now(), status = 'ok',
                             rows_in = %s, rows_loaded = %s, rows_quarantined = %s WHERE run_id = %s""",
-                         (len(long) + len(rejected_time), len(valid), len(rejected), run_id))
+                         (b.rows_in, len(valid), len(rejected), run_id))
         return {"run_id": run_id, "loaded": len(valid), "quarantined": len(rejected)}
     except Exception:
         conn.rollback()

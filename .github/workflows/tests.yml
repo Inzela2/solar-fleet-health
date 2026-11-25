@@ -1,7 +1,7 @@
 name: tests
 on: [push, pull_request]
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -9,4 +9,28 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - run: pytest -q -m "not integration"
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: solar, POSTGRES_PASSWORD: solar, POSTGRES_DB: solar}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U solar" --health-interval 5s --health-retries 10
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8
+        env: {CLICKHOUSE_SKIP_USER_SETUP: "1"}
+        ports: ["8123:8123"]
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8123/ping" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest -q -m integration
+        env: {FLEET_REQUIRE_DB: "1"}
